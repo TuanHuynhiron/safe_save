@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chẩn đoán Bệnh Lá {{ crop.name }} - PyTorch</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .preview-thumb {
+            width: 80px;
+            height: 80px;
+            object-fit: cover;
+            border-radius: 6px;
+            border: 1px solid #dee2e6;
+        }
+    </style>
+</head>
+<body class="bg-light">
+    <div class="container py-4">
+        <!-- Nút Quay về trang chủ -->
+        <div class="mb-3">
+            <a href="/" class="btn btn-sm btn-secondary">← Quay lại Trang Chủ Khu Vườn</a>
+        </div>
+
+        <h2 class="text-center text-success fw-bold mb-4">
+            {{ crop.icon }} Hệ Thống Chẩn Đoán Bệnh Lá {{ crop.name }} & Huấn Luyện AI
+        </h2>
+
+        <div class="row g-4">
+            <!-- Cột 1: Chẩn đoán -->
+            <div class="col-lg-6">
+                <div class="card shadow-sm border-primary h-100">
+                    <div class="card-header bg-primary text-white fw-bold fs-5">
+                        🔍 1. Chẩn Đoán Bệnh Lá {{ crop.name }}
+                    </div>
+                    <div class="card-body d-flex flex-column justify-content-between">
+                        <form id="predictForm">
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">Chọn ảnh lá {{ crop.name | lower }} cần kiểm tra:</label>
+                                <input type="file" id="predictFile" class="form-control" accept="image/*" required>
+                                
+                                <div id="predictPreview" class="mt-3 text-center d-none">
+                                    <p class="text-muted small mb-1">Ảnh đã chọn:</p>
+                                    <img id="predictImgView" src="" class="img-fluid rounded border shadow-sm" style="max-height: 180px;">
+                                </div>
+                            </div>
+                            <button type="submit" class="btn btn-primary w-100">Chẩn đoán ngay</button>
+                        </form>
+
+                        <div id="predictResult" class="mt-3 d-none">
+                            <div class="alert alert-info m-0">
+                                <h5 class="m-0">Bệnh chẩn đoán: <span id="resDisease" class="text-danger fw-bold"></span></h5>
+                                <p class="mt-2 mb-0">Độ tin cậy của AI: <span id="resConfidence" class="fw-bold"></span>%</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Cột 2: Đóng góp tập dữ liệu -->
+            <div class="col-lg-6">
+                <div class="card shadow-sm border-success h-100">
+                    <div class="card-header bg-success text-white fw-bold fs-5">
+                        ➕ 2. Thêm Dữ Liệu Lá {{ crop.name }}
+                    </div>
+                    <div class="card-body">
+                        <form id="addSampleForm">
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">Chọn tập ảnh mẫu (Giữ **Ctrl** hoặc **Shift** để chọn nhiều ảnh):</label>
+                                <input type="file" id="sampleFiles" class="form-control" accept="image/*" multiple required>
+                                <div class="form-text">Bạn có thể chọn nhiều ảnh cùng lúc.</div>
+
+                                <div id="batchPreviewContainer" class="mt-3 d-none">
+                                    <p class="text-muted small mb-1">Các ảnh đã chọn (<span id="batchCount" class="fw-bold">0</span> ảnh):</p>
+                                    <div id="batchPreviewGrid" class="d-flex flex-wrap gap-2 p-2 border rounded bg-white" style="max-height: 160px; overflow-y: auto;"></div>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">Nhập tên/nhãn bệnh tương ứng:</label>
+                                <input type="text" id="diseaseName" class="form-control" placeholder="Ví dụ: Đốm lá, Khỏe mạnh..." required>
+                            </div>
+                            <button type="submit" id="btnUploadBatch" class="btn btn-success w-100">Lưu vào tập dữ liệu {{ crop.name }}</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Cột 3: Quản lý tập dữ liệu & Huấn luyện PyTorch -->
+            <div class="col-12">
+                <div class="card shadow-sm border-dark">
+                    <div class="card-header bg-dark text-white fw-bold fs-5 d-flex justify-content-between align-items-center">
+                        <span>🤖 3. Huấn Luyện AI riêng cho {{ crop.name }}</span>
+                        <button class="btn btn-sm btn-outline-light" onclick="loadDatasetInfo()">🔄 Cập nhật danh sách</button>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-5">
+                                <h6>Tập dữ liệu lá {{ crop.name }} hiện có:</h6>
+                                <ul id="datasetList" class="list-group mb-3">
+                                    <li class="list-group-item text-muted">Chưa có dữ liệu...</li>
+                                </ul>
+
+                                <div class="mb-3">
+                                    <label class="form-label fw-bold">Số chu kỳ huấn luyện (Epochs):</label>
+                                    <input type="number" id="epochInput" class="form-control" value="5" min="1" max="50">
+                                </div>
+                                <button id="btnTrain" class="btn btn-danger w-100 fw-bold" onclick="startTraining()">🚀 Huấn Luyện AI {{ crop.name }}</button>
+                            </div>
+
+                            <div class="col-md-7">
+                                <h6>Nhật ký quá trình AI học (Training Logs):</h6>
+                                <pre id="trainLogs" class="bg-dark text-light p-3 rounded" style="height: 220px; overflow-y: auto;">Chờ bắt đầu huấn luyện...</pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const CROP_TYPE = "{{ crop_type }}";
+
+        document.addEventListener("DOMContentLoaded", loadDatasetInfo);
+
+        // 1. Xem trước 1 ảnh
+        document.getElementById('predictFile').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            const previewDiv = document.getElementById('predictPreview');
+            const imgView = document.getElementById('predictImgView');
+
+            if (file) {
+                imgView.src = URL.createObjectURL(file);
+                previewDiv.classList.remove('d-none');
+            } else {
+                previewDiv.classList.add('d-none');
+            }
+        });
+
+        // 2. Xem trước hàng loạt ảnh
+        document.getElementById('sampleFiles').addEventListener('change', (e) => {
+            const files = e.target.files;
+            const container = document.getElementById('batchPreviewContainer');
+            const grid = document.getElementById('batchPreviewGrid');
+            const countSpan = document.getElementById('batchCount');
+
+            grid.innerHTML = '';
+
+            if (files && files.length > 0) {
+                countSpan.innerText = files.length;
+                container.classList.remove('d-none');
+
+                Array.from(files).forEach(file => {
+                    const img = document.createElement('img');
+                    img.src = URL.createObjectURL(file);
+                    img.className = 'preview-thumb';
+                    grid.appendChild(img);
+                });
+            } else {
+                container.classList.add('d-none');
+            }
+        });
+
+        // 3. Tải danh sách nhãn
+        async function loadDatasetInfo() {
+            const res = await fetch(`/api/${CROP_TYPE}/dataset-info`);
+            const data = await res.json();
+            const list = document.getElementById('datasetList');
+            list.innerHTML = '';
+
+            const keys = Object.keys(data.classes);
+            if (keys.length === 0) {
+                list.innerHTML = '<li class="list-group-item text-muted">Chưa có ảnh nào trong tập dữ liệu.</li>';
+                return;
+            }
+
+            keys.forEach(cls => {
+                list.innerHTML += `<li class="list-group-item d-flex justify-content-between align-items-center">
+                    <b>${cls}</b>
+                    <span class="badge bg-primary rounded-pill">${data.classes[cls]} ảnh</span>
+                </li>`;
+            });
+        }
+
+        // 4. Upload ảnh mẫu
+        document.getElementById('addSampleForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const files = document.getElementById('sampleFiles').files;
+            const diseaseName = document.getElementById('diseaseName').value;
+            const btn = document.getElementById('btnUploadBatch');
+
+            if (files.length === 0) {
+                alert("Vui lòng chọn ít nhất 1 ảnh!");
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerText = `⏳ Đang tải lên ${files.length} ảnh...`;
+
+            const formData = new FormData();
+            formData.append('disease_name', diseaseName);
+
+            for (let i = 0; i < files.length; i++) {
+                formData.append('files', files[i]);
+            }
+
+            const res = await fetch(`/api/${CROP_TYPE}/add-sample`, { method: 'POST', body: formData });
+            const data = await res.json();
+
+            if (res.ok) {
+                alert(data.message);
+                document.getElementById('addSampleForm').reset();
+                document.getElementById('batchPreviewContainer').classList.add('d-none');
+                loadDatasetInfo();
+            } else {
+                alert(data.error);
+            }
+
+            btn.disabled = false;
+            btn.innerText = "Lưu vào tập dữ liệu";
+        });
+
+        // 5. Chẩn đoán
+        document.getElementById('predictForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData();
+            formData.append('file', document.getElementById('predictFile').files[0]);
+
+            const resDiv = document.getElementById('predictResult');
+            resDiv.classList.add('d-none');
+
+            const res = await fetch(`/api/${CROP_TYPE}/predict`, { method: 'POST', body: formData });
+            const data = await res.json();
+
+            if (res.ok) {
+                document.getElementById('resDisease').innerText = data.disease;
+                document.getElementById('resConfidence').innerText = data.confidence;
+                resDiv.classList.remove('d-none');
+            } else {
+                alert(data.error);
+            }
+        });
+
+        // 6. Huấn luyện AI
+        async function startTraining() {
+            const epochs = document.getElementById('epochInput').value;
+            const btn = document.getElementById('btnTrain');
+            const logsPre = document.getElementById('trainLogs');
+
+            btn.disabled = true;
+            btn.innerText = "⏳ Đang huấn luyện AI...";
+            logsPre.innerText = "Bắt đầu khởi tạo mô hình PyTorch...\nVui lòng đợi trong giây lát!\n\n";
+
+            const formData = new FormData();
+            formData.append('epochs', epochs);
+
+            const res = await fetch(`/api/${CROP_TYPE}/train`, { method: 'POST', body: formData });
+            const data = await res.json();
+
+            if (res.ok) {
+                logsPre.innerText += data.logs.join('\n') + '\n\n' + data.message;
+            } else {
+                logsPre.innerText += "❌ LỖI: " + data.error;
+            }
+
+            btn.disabled = false;
+            btn.innerText = "🚀 Huấn Luyện AI";
+        }
+    </script>
+</body>
+</html>
